@@ -1,6 +1,8 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_render.h>
 #include <SDL2/SDL_scancode.h>
+#include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -22,6 +24,8 @@ float min_x = -10;
 float max_x = 10;
 float min_y = -10;
 float max_y = 10;
+
+int nbr_digits = 8;
 
 typedef struct my_color {
   int r;
@@ -103,16 +107,26 @@ void drawFunction(SDL_Renderer *renderer, float func(float), my_color c) {
 float basicFunc(float x) { return x * x; }
 float basicFunc2(float x) { return 1.1 * x + 2; }
 float basicFunc3(float x) { return sin(x); }
+float basicFunc4(float x) { return x != 0 ? 1 / x : 0; }
 
 // ------------------------ Window Manipulation -------------------------
-void changeScale(int scale) {
+void changeScale(float scale) {
   if (DEBUG_PRINT) {
-    printf("Changing Scale to: %d\n", scale);
+    printf("Changing Scale to: %.2f\n", scale);
   }
   min_x = -scale;
   max_x = scale;
   min_y = -scale;
   max_y = scale;
+}
+void incrementScale(int incr) {
+  if (DEBUG_PRINT) {
+    printf("Changing Scale\n");
+  }
+  min_x = min_x + incr * min_x / 10;
+  max_x = max_x + incr * max_x / 10;
+  min_y = min_y + incr * min_y / 10;
+  max_y = max_y + incr * max_y / 10;
 }
 
 int main(int argc, char *argv[]) {
@@ -128,11 +142,78 @@ int main(int argc, char *argv[]) {
   Uint32 render_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
   SDL_Renderer *rend = SDL_CreateRenderer(win, -1, render_flags);
 
+  // Create scale digits:
+  SDL_Surface *surfaces[nbr_digits];
+  SDL_Rect dests[nbr_digits];
+  SDL_Texture *texs[nbr_digits];
+
+  // please provide a path for your image
+  float shifter;
+  float remaining;
+  int rest;
+
   int close = 0;
 
   while (!close) {
+    shifter = 10000000;
+    remaining = max_x - min_x;
+    for (int i = 0; i < nbr_digits; i++) {
+      if ((max_x - min_x < 0.99) && (i == 0)) {
+        shifter = 0.1;
+        surfaces[i] = IMG_Load("../Plotter/images/d.png");//This does not seem to work yet :(
+        continue;;
+      }
+      rest = remaining / shifter;
+      remaining -= (float)rest * shifter;
+      shifter /= 10;
+      rest = rest > 9 ? 9 : rest;
+      switch (rest) {
+      case 0:
+        surfaces[i] = IMG_Load("../Plotter/images/0.png");
+        break;
+      case 1:
+        surfaces[i] = IMG_Load("../Plotter/images/1.png");
+        break;
+      case 2:
+        surfaces[i] = IMG_Load("../Plotter/images/2.png");
+        break;
+      case 3:
+        surfaces[i] = IMG_Load("../Plotter/images/3.png");
+        break;
+      case 4:
+        surfaces[i] = IMG_Load("../Plotter/images/4.png");
+        break;
+      case 5:
+        surfaces[i] = IMG_Load("../Plotter/images/5.png");
+        break;
+      case 6:
+        surfaces[i] = IMG_Load("../Plotter/images/6.png");
+        break;
+      case 7:
+        surfaces[i] = IMG_Load("../Plotter/images/7.png");
+        break;
+      case 8:
+        surfaces[i] = IMG_Load("../Plotter/images/8.png");
+        break;
+      case 9:
+        surfaces[i] = IMG_Load("../Plotter/images/9.png");
+        break;
+      default:
+        break;
+      }
+      texs[i] = SDL_CreateTextureFromSurface(rend, surfaces[i]);
+      SDL_QueryTexture(texs[i], NULL, NULL, &dests[i].w, &dests[i].h);
+      dests[i].w /= 6;
+      dests[i].h /= 6;
+      dests[i].x = (50 - dests[i].w) + 15 * i;
+      dests[i].y = (50 - dests[i].h);
+      SDL_FreeSurface(surfaces[i]);
+    }
     SDL_Event event;
     SDL_RenderClear(rend);
+    for (int i = 0; i < nbr_digits; i++) {
+      SDL_RenderCopy(rend, texs[i], NULL, &dests[i]);
+    }
     drawCoordinateWindow(rend);
     my_color f1 = {255, 0, 0};
     my_color f2 = {255, 0, 255};
@@ -140,6 +221,7 @@ int main(int argc, char *argv[]) {
     drawFunction(rend, basicFunc, f1);
     drawFunction(rend, basicFunc2, f2);
     drawFunction(rend, basicFunc3, f3);
+    // drawFunction(rend, basicFunc4, f4);
     SDL_RenderPresent(rend);
 
     // Events management
@@ -155,28 +237,32 @@ int main(int argc, char *argv[]) {
         case SDL_SCANCODE_Q:
           exit(0);
         case SDL_SCANCODE_1:
-          changeScale(10);
+          changeScale(0.1);
           break;
         case SDL_SCANCODE_2:
-          changeScale(100);
+          changeScale(1);
           break;
         case SDL_SCANCODE_3:
-          changeScale(1000);
+          changeScale(100);
           break;
         case SDL_SCANCODE_4:
-          changeScale(1);
+          incrementScale(-1);
+          break;
+        case SDL_SCANCODE_5:
+          incrementScale(1);
           break;
         default:
           break;
         }
       }
     }
-
-    // SDL_RenderClear(rend);
     SDL_RenderPresent(rend);
     SDL_Delay(1000 / 30);
   }
 
+  for (int i = 0; i < nbr_digits; i++) {
+    SDL_DestroyTexture(texs[i]);
+  }
   SDL_DestroyRenderer(rend);
   SDL_DestroyWindow(win);
   SDL_Quit();
