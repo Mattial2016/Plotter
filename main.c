@@ -34,6 +34,7 @@ typedef struct my_color {
 } my_color;
 
 // ------------------ Draw fundamental functions -------------------------
+
 // Helper function for drawing a single pixel
 void putPixelRGB(SDL_Renderer *renderer, int x, int y, unsigned char r,
                  unsigned char g, unsigned char b) {
@@ -93,80 +94,32 @@ void drawFunction(SDL_Renderer *renderer, float func(float), my_color c) {
     if (y > max_y || y < min_y) {
       continue;
     }
-    if (y > 0) {
-      j = (int)((float)WINDOW_Y_SIZE / 2) * (1 - (y / max_y));
-    } else {
+    j = (int)((float)WINDOW_Y_SIZE / 2) * (1 - (y / max_y));
+    if (y <= 0) {
       j = ((float)WINDOW_Y_SIZE / 2) +
           (((float)WINDOW_Y_SIZE / 2) * (y / min_y));
     }
-    assert(j >= 0 && j <= WINDOW_Y_SIZE);
+    assert(j >= 0 && j <= WINDOW_Y_SIZE); // really necessary?
     putPixelRGB(renderer, i, j, c.r, c.g, c.b);
   }
 }
-// -------------------------- Test Functions -------------------------------
-float basicFunc(float x) { return x * x; }
-float basicFunc2(float x) { return 1.1 * x + 2; }
-float basicFunc3(float x) { return sin(x); }
-float basicFunc4(float x) { return x != 0 ? 1 / x : 0; }
 
-// ------------------------ Window Manipulation -------------------------
-void changeScale(float scale) {
-  if (DEBUG_PRINT) {
-    printf("Changing Scale to: %.2f\n", scale);
-  }
-  min_x = -scale;
-  max_x = scale;
-  min_y = -scale;
-  max_y = scale;
-}
-void incrementScale(int incr) {
-  if (DEBUG_PRINT) {
-    printf("Changing Scale\n");
-  }
-  min_x = min_x + incr * min_x / 10;
-  max_x = max_x + incr * max_x / 10;
-  min_y = min_y + incr * min_y / 10;
-  max_y = max_y + incr * max_y / 10;
-}
-
-int main(int argc, char *argv[]) {
-  // returns zero on success else non-zero
-  if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
-    printf("error initializing SDL: %s\n", SDL_GetError());
-  }
-  SDL_Window *win =
-      SDL_CreateWindow("PLOTTER", // creates a window
-                       SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                       WINDOW_X_SIZE, WINDOW_Y_SIZE, 0);
-
-  Uint32 render_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
-  SDL_Renderer *rend = SDL_CreateRenderer(win, -1, render_flags);
-
-  // Create scale digits:
-  SDL_Surface *surfaces[nbr_digits];
-  SDL_Rect dests[nbr_digits];
-  SDL_Texture *texs[nbr_digits];
-
-  // please provide a path for your image
-  float shifter;
-  float remaining;
+// Draw the digits showing the scale of the current window
+void drawScaleDigits(SDL_Surface *surfaces[nbr_digits],
+                     SDL_Rect dests[nbr_digits], SDL_Texture *texs[nbr_digits],
+                     SDL_Renderer *rend) {
+  float shifter = 10000000;
+  float remaining = (max_x - min_x) / 2;
   int rest;
-
-  int close = 0;
-
-  while (!close) {
-    shifter = 10000000;
-    remaining = max_x - min_x;
-    for (int i = 0; i < nbr_digits; i++) {
-      if ((max_x - min_x < 0.99) && (i == 0)) {
-        shifter = 0.1;
-        surfaces[i] = IMG_Load("../Plotter/images/d.png");//This does not seem to work yet :(
-        continue;;
-      }
+  for (int i = 0; i < nbr_digits; i++) {
+    if ((remaining < 0.99) && (i == 0)) {
+      shifter = 0.1;
+      surfaces[i] =
+          IMG_Load("../Plotter/images/d.png"); // This does not seem to work yet
+    } else {
       rest = remaining / shifter;
       remaining -= (float)rest * shifter;
       shifter /= 10;
-      rest = rest > 9 ? 9 : rest;
       switch (rest) {
       case 0:
         surfaces[i] = IMG_Load("../Plotter/images/0.png");
@@ -196,24 +149,77 @@ int main(int argc, char *argv[]) {
         surfaces[i] = IMG_Load("../Plotter/images/8.png");
         break;
       case 9:
-        surfaces[i] = IMG_Load("../Plotter/images/9.png");
-        break;
       default:
-        break;
+        surfaces[i] = IMG_Load("../Plotter/images/9.png");
       }
-      texs[i] = SDL_CreateTextureFromSurface(rend, surfaces[i]);
-      SDL_QueryTexture(texs[i], NULL, NULL, &dests[i].w, &dests[i].h);
-      dests[i].w /= 6;
-      dests[i].h /= 6;
-      dests[i].x = (50 - dests[i].w) + 15 * i;
-      dests[i].y = (50 - dests[i].h);
-      SDL_FreeSurface(surfaces[i]);
     }
+    texs[i] = SDL_CreateTextureFromSurface(rend, surfaces[i]);
+    SDL_QueryTexture(texs[i], NULL, NULL, &dests[i].w, &dests[i].h);
+    dests[i].w /= 6;
+    dests[i].h /= 6;
+    dests[i].x = (50 - dests[i].w) + 15 * i;
+    dests[i].y = (50 - dests[i].h);
+    SDL_FreeSurface(surfaces[i]);
+  }
+  SDL_RenderClear(rend);
+  for (int i = 0; i < nbr_digits; i++) {
+    SDL_RenderCopy(rend, texs[i], NULL, &dests[i]);
+  }
+}
+// This function has to be called after drawScaleDigits!
+void removeDigits(SDL_Texture *texs[nbr_digits]) {
+  for (int i = 0; i < nbr_digits; i++) {
+    SDL_DestroyTexture(texs[i]);
+  }
+}
+// -------------------------- Test Functions -------------------------------
+float basicFunc(float x) { return x * x; }
+float basicFunc2(float x) { return 1.1 * x + 2; }
+float basicFunc3(float x) { return 1000 * sin(x / 500); }
+float basicFunc4(float x) { return x != 0 ? 1 / x : 0; }
+
+// ------------------------ Window Manipulation -------------------------
+void changeScale(float scale) {
+  if (DEBUG_PRINT) {
+    printf("Changing Scale to: %.2f\n", scale);
+  }
+  min_x = -scale;
+  max_x = scale;
+  min_y = -scale;
+  max_y = scale;
+}
+void incrementScale(int incr) {
+  if (DEBUG_PRINT) {
+    printf("Incrementing Scale\n");
+  }
+  min_x = min_x + incr * min_x / 10;
+  max_x = max_x + incr * max_x / 10;
+  min_y = min_y + incr * min_y / 10;
+  max_y = max_y + incr * max_y / 10;
+}
+
+int main(int argc, char *argv[]) {
+  // returns zero on success else non-zero
+  if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+    printf("error initializing SDL: %s\n", SDL_GetError());
+  }
+  SDL_Window *win =
+      SDL_CreateWindow("PLOTTER", SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, WINDOW_X_SIZE, WINDOW_Y_SIZE, 0);
+
+  Uint32 render_flags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
+  SDL_Renderer *rend = SDL_CreateRenderer(win, -1, render_flags);
+
+  // Create scale digits:
+  SDL_Surface *surfaces[nbr_digits];
+  SDL_Rect dests[nbr_digits];
+  SDL_Texture *texs[nbr_digits];
+
+  int close = 0;
+
+  while (!close) {
     SDL_Event event;
-    SDL_RenderClear(rend);
-    for (int i = 0; i < nbr_digits; i++) {
-      SDL_RenderCopy(rend, texs[i], NULL, &dests[i]);
-    }
+    drawScaleDigits(surfaces, dests, texs, rend);
     drawCoordinateWindow(rend);
     my_color f1 = {255, 0, 0};
     my_color f2 = {255, 0, 255};
@@ -221,7 +227,6 @@ int main(int argc, char *argv[]) {
     drawFunction(rend, basicFunc, f1);
     drawFunction(rend, basicFunc2, f2);
     drawFunction(rend, basicFunc3, f3);
-    // drawFunction(rend, basicFunc4, f4);
     SDL_RenderPresent(rend);
 
     // Events management
@@ -231,7 +236,6 @@ int main(int argc, char *argv[]) {
       case SDL_QUIT:
         close = 1;
         break;
-
       case SDL_KEYDOWN:
         switch (event.key.keysym.scancode) {
         case SDL_SCANCODE_Q:
@@ -260,9 +264,7 @@ int main(int argc, char *argv[]) {
     SDL_Delay(1000 / 30);
   }
 
-  for (int i = 0; i < nbr_digits; i++) {
-    SDL_DestroyTexture(texs[i]);
-  }
+  removeDigits(texs);
   SDL_DestroyRenderer(rend);
   SDL_DestroyWindow(win);
   SDL_Quit();
